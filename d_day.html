@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>여름방학 D-Day & 수업 타이머 🏖️</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen_Script&family=Orbitron:wght@500;700&display=swap');
+
+    .font-hand {
+      font-family: 'Gaegu', cursive;
+    }
+    .font-pen {
+      font-family: 'Nanum Pen Script', cursive;
+    }
+    .font-digital {
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    .summer-bg {
+      background: linear-gradient(180deg, #fef08a 0%, #bae6fd 40%, #0284c7 100%);
+    }
+
+    /* Corkboard background overridden with user's beautiful seaweed water image */
+    .corkboard {
+      background-image: url('20220424_144201.jpg');
+      background-size: cover;
+      background-position: center;
+      box-shadow: inset 0 0 50px rgba(0,0,0,0.3);
+      position: relative;
+    }
+
+    /* Glassmorphism layer to ensure post-it texts are highly readable against the seaweed */
+    .sea-water-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 118, 110, 0.15); /* Soft teal tint */
+      backdrop-filter: blur(1.5px);
+      -webkit-backdrop-filter: blur(1.5px);
+    }
+
+    /* Post-it sticky physical representation with smoother transitions */
+    .postit {
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      filter: drop-shadow(3px 5px 4px rgba(0, 0, 0, 0.2));
+      touch-action: none; /* Prevents scroll interference while dragging on mobile */
+    }
+    .postit:hover {
+      box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    }
+    .postit-active-drag {
+      z-index: 50 !important;
+      transform: scale(1.05) rotate(0deg) !important;
+      filter: drop-shadow(8px 12px 12px rgba(0, 0, 0, 0.3)) !important;
+      cursor: grabbing !important;
+    }
+  </style>
+</head>
+<body class="summer-bg text-slate-800 min-h-screen font-sans selection:bg-sky-200 pb-10">
+
+  <div id="root"></div>
+
+  <!-- React & ReactDOM Standalone -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+  <!-- Babel Standalone for JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Main Application Script -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 수업 시작 및 종료시간 데이터 (시, 분 단위 변환용)
+    const CLASS_SCHEDULE = [
+      { id: 1, label: "1교시 수업", startHour: 9, startMin: 0, endHour: 9, endMin: 40 },
+      { id: 1.5, label: "쉬는 시간", startHour: 9, startMin: 40, endHour: 9, endMin: 50 },
+      { id: 2, label: "2교시 수업", startHour: 9, startMin: 50, endHour: 10, endMin: 30 },
+      { id: 2.5, label: "쉬는 시간", startHour: 10, startMin: 30, endHour: 10, endMin: 40 },
+      { id: 3, label: "3교시 수업", startHour: 10, startMin: 40, endHour: 11, endMin: 20 },
+      { id: 3.5, label: "쉬는 시간", startHour: 11, startMin: 20, endHour: 11, endMin: 30 },
+      { id: 4, label: "4교시 수업", startHour: 11, startMin: 30, endHour: 12, endMin: 10 },
+      { id: 4.5, label: "점심 시간 🍱", startHour: 12, startMin: 10, endHour: 13, endMin: 0 },
+      { id: 5, label: "5교시 수업", startHour: 13, startMin: 0, endHour: 13, endMin: 40 },
+      { id: 5.5, label: "쉬는 시간", startHour: 13, startMin: 40, endHour: 13, endMin: 50 },
+      { id: 6, label: "6교시 수업", startHour: 13, startMin: 50, endHour: 14, endMin: 30 }
+    ];
+
+    const POSTIT_COLORS = [
+      { bg: "bg-amber-100/95 border-amber-300 text-amber-950", hex: "#fef3c7" },
+      { bg: "bg-rose-100/95 border-rose-300 text-rose-950", hex: "#ffe4e6" },
+      { bg: "bg-emerald-100/95 border-emerald-300 text-emerald-950", hex: "#d1fae5" },
+      { bg: "bg-sky-100/95 border-sky-300 text-sky-950", hex: "#e0f2fe" },
+      { bg: "bg-purple-100/95 border-purple-300 text-purple-950", hex: "#f3e8ff" }
+    ];
+
+    // --- Inline Custom SVG Icons ---
+    const IconClock = () => (
+      <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+    );
+    const IconCalendar = () => (
+      <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+    );
+    const IconPlus = () => (
+      <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
+    );
+    const IconShuffle = () => (
+      <svg className="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M4 4l5 5m4 4l8 8"></path></svg>
+    );
+    const IconTrash = () => (
+      <svg className="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+    );
+    const IconLock = () => (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0110 0v4"></path></svg>
+    );
+    const IconUnlock = () => (
+      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 019.9-1"></path></svg>
+    );
+    const IconQrCode = () => (
+      <svg className="w-4 h-4 text-sky-800" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M4 4h4v4H4zm12 0h4v4h-4zM4 16h4v4H4zm12 0h4v4h-4zM9 9h6v6H9z" /></svg>
+    );
+
+    function App() {
+      // 1. Time & Countdown States
+      const [now, setNow] = useState(new Date());
+      const [dDayString, setDDayString] = useState("로딩 중...");
+      const [classTimerText, setClassTimerText] = useState("일과 시간 분석 중...");
+      const [classLabel, setClassLabel] = useState("학교 생활");
+      
+      // 2. Post-it states
+      const [postits, setPostits] = useState([]);
+      const [randomPostits, setRandomPostits] = useState([]);
+      const [showWriteModal, setShowWriteModal] = useState(false);
+      
+      // 3. Teacher Mode states (교사용 관리 모드)
+      const [isTeacherMode, setIsTeacherMode] = useState(false);
+      const [showPasswordModal, setShowPasswordModal] = useState(false);
+      const [passwordInput, setPasswordInput] = useState('');
+      const [passwordError, setPasswordError] = useState(false);
+
+      // 4. Custom Modal alert & confirm replacements (비막힘용 커스텀 모달)
+      const [customConfirm, setCustomConfirm] = useState({ show: false, message: '', onConfirm: null });
+      const [customAlert, setCustomAlert] = useState({ show: false, message: '' });
+
+      // Form Input States
+      const [studentName, setStudentName] = useState('');
+      const [studentGrade, setStudentGrade] = useState('1');
+      const [studentClass, setStudentClass] = useState('1');
+      const [vacationGoal, setVacationGoal] = useState('');
+      const [selectedColorIdx, setSelectedColorIdx] = useState(0);
+
+      // Drawing Canvas Refs & States
+      const canvasRef = useRef(null);
+      const [isDrawing, setIsDrawing] = useState(false);
+      const [brushColor, setBrushColor] = useState('#000000');
+      const [brushSize, setBrushSize] = useState(3);
+
+      // QR Code Modal State
+      const [showQrModal, setShowQrModal] = useState(false);
+
+      // Drag State Tracker
+      const boardRef = useRef(null);
+      const [dragState, setDragState] = useState({
+        id: null,
+        startX: 0,
+        startY: 0,
+        startLeft: 0,
+        startTop: 0,
+        boardWidth: 0,
+        boardHeight: 0
+      });
+
+      // 여름방학 정식 시작 목표 시각: 2026년 7월 23일 12시 10분 00초
+      const VACATION_TARGET_DATE = new Date("2026-07-23T12:10:00");
+
+      // 시계 및 타이머 실시간 작동 루프
+      useEffect(() => {
+        const timer = setInterval(() => {
+          const current = new Date();
+          setNow(current);
+          updateDDay(current);
+          updateClassTimer(current);
+        }, 1000);
+
+        // 첫 로딩 실행
+        const initTime = new Date();
+        updateDDay(initTime);
+        updateClassTimer(initTime);
+
+        // 로컬 스토리지에서 포스트잇 정보 불러오기
+        fetchPostits();
+
+        return () => clearInterval(timer);
+      }, []);
+
+      const fetchPostits = () => {
+        // 로컬 임시 저장소 복구
+        const stored = localStorage.getItem('summer_postits_data');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          const sanitizedLocal = parsed.map(p => {
+            let colorIdx = parseInt(p.colorIdx, 10);
+            if (isNaN(colorIdx) || colorIdx < 0 || colorIdx >= POSTIT_COLORS.length) {
+              colorIdx = 0;
+            }
+            return { ...p, colorIdx };
+          });
+          setPostits(sanitizedLocal);
+          generateRandomLayout(sanitizedLocal);
+        } else {
+          // 최초 가이드 기본 소원 제공
+          const dummy = [
+            {
+              id: "dummy-1",
+              studentName: "이준서",
+              grade: "3",
+              classNo: "1",
+              vacationGoal: "파란 파도치는 바다로 가서 서핑이랑 수영 배울래요! 🏊‍♂️🏖️",
+              colorIdx: 3,
+              drawingData: "",
+              tilt: -3,
+              left: 15,
+              top: 15
+            },
+            {
+              id: "dummy-2",
+              studentName: "박서아",
+              grade: "5",
+              classNo: "2",
+              vacationGoal: "방학 동안 가족이랑 제주도 푸른 바다 여행 다녀오기! 🍹🌊",
+              colorIdx: 1,
+              drawingData: "",
+              tilt: 4,
+              left: 45,
+              top: 35
+            },
+            {
+              id: "dummy-3",
+              studentName: "최다온",
+              grade: "2",
+              classNo: "4",
+              vacationGoal: "시원한 수박 화채 매일 매일 마음껏 직접 만들어 먹기! 🍉🏡",
+              colorIdx: 2,
+              drawingData: "",
+              tilt: -5,
+              left: 65,
+              top: 10
+            }
+          ];
+          setPostits(dummy);
+          generateRandomLayout(dummy);
+          localStorage.setItem('summer_postits_data', JSON.stringify(dummy));
+        }
+      };
+
+      // D-Day 계산 알고리즘
+      const updateDDay = (currentTime) => {
+        const diff = VACATION_TARGET_DATE.getTime() - currentTime.getTime();
+        
+        if (diff <= 0) {
+          setDDayString("🎉 드디어 신나는 여름방학이 시작되었습니다! 🎉");
+          return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+        setDDayString(days + "일 " + hours + "시간 " + mins + "분 " + secs + "초 남음");
+      };
+
+      // 수업시간 카운트다운 타이머 계산기
+      const updateClassTimer = (currentTime) => {
+        const currentHours = currentTime.getHours();
+        const currentMinutes = currentTime.getMinutes();
+        const currentSeconds = currentTime.getSeconds();
+        
+        const nowInMinutes = currentHours * 60 + currentMinutes;
+        const nowInSeconds = nowInMinutes * 60 + currentSeconds;
+
+        const firstClassStart = CLASS_SCHEDULE[0].startHour * 60 + CLASS_SCHEDULE[0].startMin;
+        const lastClassEnd = CLASS_SCHEDULE[CLASS_SCHEDULE.length - 1].endHour * 60 + CLASS_SCHEDULE[CLASS_SCHEDULE.length - 1].endMin;
+
+        if (nowInMinutes < firstClassStart) {
+          const diffSec = (firstClassStart * 60) - nowInSeconds;
+          const m = Math.floor(diffSec / 60);
+          const s = diffSec % 60;
+          setClassLabel("등교 시간");
+          setClassTimerText("1교시 시작까지 " + m + "분 " + s + "초 남음 🎒");
+          return;
+        }
+
+        if (nowInMinutes >= lastClassEnd) {
+          setClassLabel("일과 종료");
+          setClassTimerText("오늘의 모든 수업 일과가 종료되었습니다! 🏠");
+          return;
+        }
+
+        for (let i = 0; i < CLASS_SCHEDULE.length; i++) {
+          const sched = CLASS_SCHEDULE[i];
+          const startSec = (sched.startHour * 60 + sched.startMin) * 60;
+          const endSec = (sched.endHour * 60 + sched.endMin) * 60;
+
+          if (nowInSeconds >= startSec && nowInSeconds < endSec) {
+            const remSec = endSec - nowInSeconds;
+            const m = Math.floor(remSec / 60);
+            const s = remSec % 60;
+            
+            setClassLabel(sched.label);
+            
+            if (sched.label.includes("수업")) {
+              setClassTimerText("쉬는 시간까지 " + m + "분 " + s + "초 남음 🔔");
+            } else if (sched.label.includes("쉬는")) {
+              setClassTimerText("다음 교시 시작까지 " + m + "분 " + s + "초 남음 🏃‍♂️");
+            } else if (sched.label.includes("점심")) {
+              setClassTimerText("점심 시간 종료까지 " + m + "분 " + s + "초 남음 😋");
+            }
+            return;
+          }
+        }
+      };
+
+      // 포스트잇들을 배경 위에 알맞게 흩뿌리기
+      const generateRandomLayout = (targetList) => {
+        const randomized = targetList.map((item, idx) => {
+          const randomTilt = item.tilt !== undefined ? item.tilt : Math.floor(Math.random() * 14) - 7;
+          const savedLeft = item.left !== undefined ? Number(item.left) : (10 + (idx * 22) % 75);
+          const savedTop = item.top !== undefined ? Number(item.top) : (15 + (idx * 15) % 60);
+          
+          let colorIdx = parseInt(item.colorIdx, 10);
+          if (isNaN(colorIdx) || colorIdx < 0 || colorIdx >= POSTIT_COLORS.length) {
+            colorIdx = 0;
+          }
+          
+          return {
+            ...item,
+            colorIdx,
+            tilt: randomTilt,
+            left: savedLeft,
+            top: savedTop
+          };
+        });
+        setRandomPostits(randomized);
+      };
+
+      const handleShuffle = () => {
+        const randomized = randomPostits.map(item => ({
+          ...item,
+          tilt: Math.floor(Math.random() * 14) - 7,
+          left: Math.floor(Math.random() * 70) + 5,
+          top: Math.floor(Math.random() * 55) + 5
+        }));
+        setRandomPostits(randomized);
+      };
+
+      // 핀을 드래그해서 움직이는 기능 구현
+      const handleDragStart = (id, e) => {
+        e.preventDefault();
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        const board = boardRef.current;
+        if (!board) return;
+        const boardRect = board.getBoundingClientRect();
+        
+        const targetItem = randomPostits.find(p => p.id === id);
+        if (!targetItem) return;
+
+        setDragState({
+          id,
+          startX: clientX,
+          startY: clientY,
+          startLeft: targetItem.left,
+          startTop: targetItem.top,
+          boardWidth: boardRect.width,
+          boardHeight: boardRect.height
+        });
+      };
+
+      const handleDragMove = (e) => {
+        if (!dragState.id) return;
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const deltaX = clientX - dragState.startX;
+        const deltaY = clientY - dragState.startY;
+
+        const pctDeltaX = (deltaX / dragState.boardWidth) * 100;
+        const pctDeltaY = (deltaY / dragState.boardHeight) * 100;
+
+        const newLeft = Math.max(0, Math.min(82, dragState.startLeft + pctDeltaX));
+        const newTop = Math.max(0, Math.min(75, dragState.startTop + pctDeltaY));
+
+        setRandomPostits(prev => prev.map(p => {
+          if (p.id === dragState.id) {
+            return { ...p, left: newLeft, top: newTop };
+          }
+          return p;
+        }));
+      };
+
+      const handleDragEnd = () => {
+        if (!dragState.id) return;
+
+        setPostits(prev => {
+          const updated = prev.map(p => {
+            const matchedRandom = randomPostits.find(rp => rp.id === p.id);
+            if (matchedRandom) {
+              return { ...p, left: matchedRandom.left, top: matchedRandom.top };
+            }
+            return p;
+          });
+          localStorage.setItem('summer_postits_data', JSON.stringify(updated));
+          return updated;
+        });
+
+        setDragState({ id: null, startX: 0, startY: 0, startLeft: 0, startTop: 0, boardWidth: 0, boardHeight: 0 });
+      };
+
+      // 그림 그리기 캔버스 핸들러들
+      const startDrawing = (e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        const ctx = canvas.getContext('2d');
+        ctx.strokeStyle = brushColor;
+        ctx.lineWidth = brushSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        setIsDrawing(true);
+      };
+
+      const draw = (e) => {
+        if (!isDrawing) return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        const ctx = canvas.getContext('2d');
+        ctx.lineTo(x, y);
+        ctx.stroke();
+      };
+
+      const stopDrawing = () => {
+        setIsDrawing(false);
+      };
+
+      const clearCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      };
+
+      const handleOpenWriteModal = () => {
+        setShowWriteModal(true);
+        setTimeout(() => {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+        }, 100);
+      };
+
+      // 포스트잇 최종 제출 등록 (오직 로컬 저장 전용으로 최적화)
+      const handleAddPostit = (e) => {
+        e.preventDefault();
+        if (!studentName.trim() || !vacationGoal.trim()) {
+          setCustomAlert({ show: true, message: "⚠️ 이름과 여름방학 소원 목표를 정확히 적어주세요!" });
+          return;
+        }
+
+        let drawingUrl = "";
+        const canvas = canvasRef.current;
+        if (canvas) {
+          drawingUrl = canvas.toDataURL('image/png');
+        }
+
+        const newPostit = {
+          id: "postit_" + Date.now(),
+          studentName: studentName.trim(),
+          grade: studentGrade,
+          classNo: studentClass,
+          vacationGoal: vacationGoal.trim(),
+          colorIdx: selectedColorIdx,
+          drawingData: drawingUrl,
+          tilt: Math.floor(Math.random() * 14) - 7,
+          left: Math.floor(Math.random() * 65) + 10,
+          top: Math.floor(Math.random() * 50) + 15
+        };
+
+        const updated = [newPostit, ...postits];
+        setPostits(updated);
+        generateRandomLayout(updated);
+        localStorage.setItem('summer_postits_data', JSON.stringify(updated));
+
+        // 입력 폼 필드 클리어
+        setStudentName('');
+        setVacationGoal('');
+        setSelectedColorIdx(0);
+        setShowWriteModal(false);
+      };
+
+      // 교사용 모드 비밀번호 검증 트리거 (0324)
+      const triggerPasswordCheck = () => {
+        if (isTeacherMode) {
+          setIsTeacherMode(false);
+          setCustomAlert({ show: true, message: "🔒 교사용 관리 권한 모드가 해제되었습니다." });
+        } else {
+          setPasswordInput('');
+          setPasswordError(false);
+          setShowPasswordModal(true);
+        }
+      };
+
+      const handleVerifyPasswordSubmit = (e) => {
+        e.preventDefault();
+        if (passwordInput === "0324") {
+          setIsTeacherMode(true);
+          setShowPasswordModal(false);
+          setPasswordInput('');
+          setCustomAlert({ show: true, message: "🔒 확인 성공!\n이제 학생들이 등록한 소원을 자유롭게 삭제 관리하실 수 있습니다." });
+        } else {
+          setPasswordError(true);
+          setPasswordInput('');
+        }
+      };
+
+      const handleKeypadPress = (val) => {
+        if (passwordInput.length < 6) {
+          setPasswordInput(prev => prev + val);
+        }
+      };
+
+      // 특정 포스트잇 영구 삭제 (차단 위험이 전혀 없는 커스텀 모달 트리거)
+      const handleDeletePostit = (id, name, e) => {
+        e.stopPropagation();
+        setCustomConfirm({
+          show: true,
+          message: `📢 ${name} 학생의 포스트잇을 칠판에서 영구 삭제하시겠습니까?`,
+          onConfirm: () => {
+            const updated = postits.filter(p => p.id !== id);
+            setPostits(updated);
+            generateRandomLayout(updated);
+            localStorage.setItem('summer_postits_data', JSON.stringify(updated));
+          }
+        });
+      };
+
+      // 오전/오후 및 실시간 디지털 시계 텍스트 분리 파서 (두 줄 개행 고정 장치)
+      const getFormattedClock = () => {
+        const timeStr = now.toLocaleTimeString(); // "오전 10:20:30" 형태
+        const parts = timeStr.split(" ");
+        if (parts.length === 2) {
+          return { ampm: parts[0], time: parts[1] };
+        }
+        return { ampm: "", time: timeStr };
+      };
+
+      const clockObj = getFormattedClock();
+      const daysOfVacation = ["일", "월", "화", "수", "목", "금", "토"];
+
+      return (
+        <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 font-hand">
+          
+          {/* Main Top Header and live D-day widget */}
+          <section className="bg-white/80 backdrop-blur-md rounded-2xl p-4 md:p-5 shadow-lg border border-sky-100/50 mb-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="text-center md:text-left space-y-0.5">
+              <span className="text-3xl animate-bounce inline-block">🏖️</span>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-sky-950 font-hand inline-block ml-2">
+                우리 학교 <span className="text-sky-600 underline decoration-wavy decoration-yellow-400">여름방학 D-DAY</span>
+              </h1>
+              <p className="text-xs text-slate-500 font-medium font-sans">
+                {now.getFullYear()}년 {now.getMonth() + 1}월 {now.getDate()}일 ({daysOfVacation[now.getDay()]}) | 교실 시계 & 여름날의 버킷리스트
+              </p>
+            </div>
+
+            {/* D-Day Timer Block */}
+            <div className="bg-sky-50 border border-sky-100 rounded-xl px-5 py-2.5 shadow-inner text-center">
+              <div className="text-xl md:text-2xl font-black text-sky-900 tracking-wider font-digital bg-white py-2 px-5 rounded-lg shadow-sm border border-sky-100 inline-block">
+                {dDayString}
+              </div>
+            </div>
+          </section>
+
+          {}
+          {/* 초대형 디지털 전광판 시계 (개행 고정 및 최적 비율 보증) */}
+          <section className="bg-slate-900/95 text-white rounded-2xl p-4 shadow-xl border border-slate-800 mb-4 grid grid-cols-1 md:grid-cols-12 items-center gap-4 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.15),transparent)]"></div>
+            
+            {/* 좌측 - 초대형 현재 시각 시계 */}
+            <div className="md:col-span-5 text-center md:text-left relative z-10 flex flex-col justify-center">
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 font-bold tracking-wider px-2 py-0.5 rounded-full font-sans uppercase animate-pulse self-center md:self-start mb-1">
+                LIVE CLOCK
+              </span>
+              <div className="leading-tight">
+                <div className="text-sm md:text-base font-bold text-emerald-500/80 font-sans tracking-wide">
+                  {clockObj.ampm}
+                </div>
+                <div className="text-4xl md:text-5xl lg:text-6xl font-black tracking-widest font-digital text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
+                  {clockObj.time}
+                </div>
+              </div>
+            </div>
+
+            {/* 우측 - 교실 수업 일과 카운트다운 타이머 */}
+            <div className="md:col-span-7 text-center md:text-right relative z-10 flex flex-col justify-center items-center md:items-end">
+              <span className="text-[10px] bg-sky-500/30 text-sky-300 font-bold tracking-wider px-2 py-0.5 rounded-full font-sans uppercase mb-1">
+                {classLabel} TIMER
+              </span>
+              <div className="text-lg md:text-xl lg:text-2xl font-black tracking-wide font-digital text-sky-300 bg-black/40 py-2.5 px-4 rounded-xl border border-slate-700/60 inline-block">
+                {classTimerText}
+              </div>
+            </div>
+          </section>
+
+          {}
+          {/* Post-it chalkboard Board */}
+          <section className="bg-white rounded-2xl shadow-lg overflow-hidden border border-slate-200">
+            
+            {/* Header controls for post-it blackboard */}
+            <div className="bg-slate-100 px-5 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-slate-200">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-sky-400"></div>
+                <h3 className="text-base font-bold text-slate-900">
+                  🏖️ 우리 반의 여름방학 소망 포스트잇 (원하는 핀을 잡아 이동해 보세요!)
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2 font-sans">
+                
+                {/* [교사용 권한 삭제 관리 모드 토글] */}
+                <button
+                  type="button"
+                  onClick={triggerPasswordCheck}
+                  className={"px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-sm border " + (isTeacherMode ? "bg-emerald-50 border-emerald-300 text-emerald-800" : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700")}
+                  title="선생님만 지울 수 있는 관리 모드 열기"
+                >
+                  {isTeacherMode ? <IconUnlock /> : <IconLock />}
+                  <span>{isTeacherMode ? "교사용 모드 해제" : "교사용 모드"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShuffle}
+                  className="bg-white hover:bg-slate-50 border border-slate-200/80 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center transition-all shadow-sm"
+                  title="포스트잇 위치 다시 섞기"
+                >
+                  <IconShuffle />
+                  <span>위치 섞기</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenWriteModal}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold px-3.5 py-2 rounded-lg text-xs flex items-center transition-all shadow-md active:scale-95 gap-1"
+                >
+                  <IconPlus />
+                  <span>포스트잇 붙이기</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(true)}
+                  className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-all shadow-sm"
+                  title="접속 QR코드 보기"
+                >
+                  <IconQrCode />
+                  <span>QR 코드</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Simulated Sea water Corkboard Content Canvas */}
+            <div 
+              ref={boardRef}
+              onMouseMove={handleDragMove}
+              onTouchMove={handleDragMove}
+              onMouseUp={handleDragEnd}
+              onTouchEnd={handleDragEnd}
+              className="corkboard min-h-[500px] relative overflow-hidden rounded-b-2xl"
+            >
+              
+              {/* Glassmorphism translucent visual screen */}
+              <div className="sea-water-overlay"></div>
+
+              {randomPostits.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-teal-950/20 backdrop-blur-[1.5px]">
+                  <span className="text-5xl mb-2 animate-bounce">🎈</span>
+                  <h4 className="text-xl font-bold text-teal-950">아직 등록된 여름 소망이 없습니다!</h4>
+                  <p className="text-xs text-teal-900 mt-1 max-w-sm font-sans">
+                    상단의 <strong>"포스트잇 붙이기"</strong> 버튼을 클릭하여 시원한 여름 소원과 그림을 최초로 올려보세요!
+                  </p>
+                </div>
+              ) : (
+                <div className="relative w-full h-[500px]">
+                  {randomPostits.map((item) => {
+                    const isBeingDragged = dragState.id === item.id;
+                    
+                    let safeColorIdx = parseInt(item.colorIdx, 10);
+                    if (isNaN(safeColorIdx) || safeColorIdx < 0 || safeColorIdx >= POSTIT_COLORS.length) {
+                      safeColorIdx = 0;
+                    }
+                    const postitBgStyle = POSTIT_COLORS[safeColorIdx].bg;
+
+                    return (
+                      <div
+                        key={item.id}
+                        style={{
+                          position: 'absolute',
+                          left: item.left + "%",
+                          top: item.top + "%",
+                          transform: isBeingDragged ? 'rotate(0deg)' : "rotate(" + item.tilt + "deg)",
+                          width: '210px',
+                          zIndex: isBeingDragged ? 50 : 10
+                        }}
+                        className={"postit glass-card p-3 rounded-xl shadow-md border-t-4 border select-none space-y-2 " + (isBeingDragged ? "postit-active-drag " : "") + postitBgStyle}
+                      >
+                        
+                        {/* [드래그 핸들] Pushpin design decoration */}
+                        <div 
+                          onMouseDown={(e) => handleDragStart(item.id, e)}
+                          onTouchStart={(e) => handleDragStart(item.id, e)}
+                          className="absolute -top-3 left-1/2 -translate-x-1/2 w-5.5 h-5.5 rounded-full bg-red-600 hover:bg-red-500 shadow-md border-2 border-white flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform hover:scale-110"
+                        >
+                          <div className="w-1.2 h-1.5 rounded-full bg-white"></div>
+                        </div>
+
+                        {/* [교사용 영구삭제 버튼] */}
+                        {isTeacherMode && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeletePostit(item.id, item.studentName, e)}
+                            className="absolute -top-2.5 -right-2.5 w-5.5 h-5.5 bg-white hover:bg-rose-50 rounded-full border border-rose-200 flex items-center justify-center shadow-md transition-all scale-105"
+                            title="이 학생의 포스트잇 영구 삭제"
+                          >
+                            <IconTrash />
+                          </button>
+                        )}
+
+                        {/* Goal Content */}
+                        <div className="pt-2 text-sm leading-relaxed font-bold tracking-tight break-all text-slate-900">
+                          {item.vacationGoal}
+                        </div>
+
+                        {/* Custom Drawn Image */}
+                        {item.drawingData && (
+                          <div className="bg-white rounded-lg p-0.5 border border-slate-200/50 shadow-inner overflow-hidden pointer-events-none">
+                            <img 
+                              src={item.drawingData} 
+                              alt="Student Drawing" 
+                              className="w-full h-20 object-contain"
+                            />
+                          </div>
+                        )}
+
+                        {/* Author Tag Info */}
+                        <div className="text-right border-t border-slate-700/10 pt-1.5 flex items-center justify-between text-[10px] font-bold text-slate-600/80 font-sans">
+                          <span>{item.grade}학년 {item.classNo}반</span>
+                          <span className="bg-black/5 px-2 py-0.5 rounded-full text-slate-800 font-hand font-extrabold text-xs">
+                            {item.studentName}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+          </section>
+
+          {}
+          {/* QR Code Scan Modal */}
+          {showQrModal && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowQrModal(false)}>
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-sky-100 text-center space-y-4" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h3 className="text-lg font-bold text-slate-900">우리 학교 QR코드 스캔</h3>
+                  <button type="button" onClick={() => setShowQrModal(false)} className="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed font-sans">
+                  학생들이 모바일 스마트폰이나 태블릿 카메라로 아래 QR코드를 스캔하면 이 소원판 공간으로 바로 손쉽게 접속할 수 있습니다.
+                </p>
+                <div className="bg-slate-50 p-4 rounded-xl flex justify-center items-center">
+                  <img
+                    src={"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(window.location.href)}
+                    alt="접속용 QR코드"
+                    className="w-48 h-48 border-2 border-white shadow-sm rounded-lg"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = "https://placehold.co/200?text=QR+Code+Error";
+                    }}
+                  />
+                </div>
+                <div className="text-[10px] text-slate-400 select-all font-mono break-all bg-slate-50 p-2.5 rounded-lg border border-slate-100/60 max-h-16 overflow-y-auto font-sans">
+                  {window.location.href}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold transition-colors shadow-sm font-sans"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* [비밀번호 입력 모달 고도화] 교사용 모드 비밀번호 입력 팝업 창 (0324) */}
+          {showPasswordModal && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border-4 border-sky-400 text-center space-y-4">
+                <div className="text-center">
+                  <span className="text-4xl block mb-2">🔒</span>
+                  <h3 className="text-xl font-black text-sky-950 font-hand">교사용 모드 잠금해제</h3>
+                  <p className="text-xs text-slate-500 mt-1 font-sans">전자칠판용 키패드로 비밀번호를 입력해 주세요.</p>
+                </div>
+
+                <form onSubmit={handleVerifyPasswordSubmit} className="space-y-4">
+                  <div className="relative font-sans">
+                    <input 
+                      type="password" 
+                      readOnly 
+                      value={passwordInput} 
+                      className="w-full text-center text-2xl font-bold tracking-widest bg-slate-50 border-2 border-slate-200 rounded-xl py-2.5 focus:outline-none text-sky-900" 
+                      placeholder="••••"
+                    />
+                    {passwordInput.length > 0 && (
+                      <button 
+                        type="button" 
+                        onClick={() => setPasswordInput(prev => prev.slice(0, -1))}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-sans"
+                      >
+                        ⌫
+                      </button>
+                    )}
+                  </div>
+
+                  {passwordError && (
+                    <p className="text-xs text-rose-500 font-sans font-semibold">❌ 비밀번호가 다릅니다. 다시 입력해 주세요.</p>
+                  )}
+
+                  {/* 가상 키패드 */}
+                  <div className="grid grid-cols-3 gap-2 font-sans">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleKeypadPress(num)}
+                        className="bg-slate-100 hover:bg-slate-200 active:bg-sky-100 text-slate-800 font-extrabold py-2.5 rounded-xl text-lg shadow-sm transition-colors"
+                      >
+                        {num}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => { setPasswordInput(''); setPasswordError(false); }}
+                      className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-2.5 rounded-xl text-xs shadow-sm transition-colors"
+                    >
+                      초기화
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress(0)}
+                      className="bg-slate-100 hover:bg-slate-200 active:bg-sky-100 text-slate-800 font-extrabold py-2.5 rounded-xl text-lg shadow-sm transition-colors"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-sky-500 hover:bg-sky-600 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition-colors"
+                    >
+                      확인
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setShowPasswordModal(false); setPasswordInput(''); setPasswordError(false); }}
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs transition-colors font-sans"
+                  >
+                    닫기
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {}
+          {/* Form Modal: Add New Post-It with Canvas Painting */}
+          {showWriteModal && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 font-sans">
+              <form 
+                onSubmit={handleAddPostit} 
+                className="bg-white rounded-3xl p-6 max-w-xl w-full shadow-2xl border border-sky-100 flex flex-col max-h-[90vh] overflow-y-auto space-y-4"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-1 font-hand">
+                    <IconPlus />
+                    새 소망 포스트잇 쓰기 🍉
+                  </h3>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowWriteModal(false)} 
+                    className="text-slate-400 hover:text-slate-600 font-bold text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Grade & Class & Name selection */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">학년</label>
+                    <select
+                      value={studentGrade}
+                      onChange={(e) => setStudentGrade(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-sky-400 bg-slate-50 font-medium"
+                    >
+                      {['1','2','3','4','5','6'].map(g => (
+                        <option key={g} value={g}>{g}학년</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">반</label>
+                    <select
+                      value={studentClass}
+                      onChange={(e) => setStudentClass(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-sky-400 bg-slate-50 font-medium"
+                    >
+                      {['1','2','3','4'].map(c => (
+                        <option key={c} value={c}>{c}반</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">이름</label>
+                    <input 
+                      type="text"
+                      required
+                      placeholder="이름"
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-sky-400 bg-slate-50 font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Color Selection Palette */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">포스트잇 색상 선택</label>
+                  <div className="flex gap-2">
+                    {POSTIT_COLORS.map((col, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedColorIdx(idx)}
+                        style={{ backgroundColor: col.hex }}
+                        className={"w-7 h-7 rounded-lg border-2 transition-all " + (selectedColorIdx === idx ? 'border-sky-500 scale-110 shadow-sm' : 'border-slate-300')}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Text Goal Input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">여름방학에 하고 싶은 소원/목표</label>
+                  <textarea
+                    required
+                    maxLength={100}
+                    placeholder="여름방학에 무얼 가장 하고 싶나요? 포스트잇에 적어보세요!"
+                    value={vacationGoal}
+                    onChange={(e) => setVacationGoal(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-sky-400 bg-slate-50 resize-none text-sm font-hand font-bold text-slate-800"
+                  />
+                </div>
+
+                {/* DRAWING BOARD */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-slate-700">
+                      🎨 미니 소망 그림판 <span className="text-[10px] text-slate-400 font-normal">(마우스나 손가락으로 그림을 그려보세요!)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={clearCanvas}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 border text-slate-600 px-2 py-1 rounded-lg"
+                    >
+                      그림 지우기
+                    </button>
+                  </div>
+
+                  {/* Draw canvas grid area */}
+                  <div className="bg-slate-100 p-2 rounded-2xl border border-slate-200 flex flex-col items-center gap-2">
+                    <canvas
+                      ref={canvasRef}
+                      width={320}
+                      height={130}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      className="bg-white rounded-lg cursor-crosshair border border-slate-200 touch-none"
+                    />
+
+                    {/* Paint Tools Control panel */}
+                    <div className="w-full flex justify-between items-center gap-2 px-1">
+                      <div className="flex gap-1.5">
+                        {['#000000', '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#ffffff'].map(col => (
+                          <button
+                            key={col}
+                            type="button"
+                            onClick={() => setBrushColor(col)}
+                            style={{ backgroundColor: col }}
+                            className={"w-4 h-4 rounded-full border border-slate-300 transition-transform " + (brushColor === col ? 'scale-125 ring-2 ring-sky-400' : '')}
+                            title={col === '#ffffff' ? '지우개' : col}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                        <span>두께:</span>
+                        <input 
+                          type="range" 
+                          min="1" 
+                          max="10" 
+                          value={brushSize} 
+                          onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                          className="w-16 accent-sky-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions Footer inside modal */}
+                <div className="flex gap-2 pt-3 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setShowWriteModal(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-2.5 rounded-xl bg-sky-600 text-white text-sm font-bold hover:bg-sky-700 transition-colors shadow-md shadow-sky-600/10"
+                  >
+                    소원 붙이기 완료!
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {}
+          {/* [커스텀 알림 모달 창 (Alert 대용)] */}
+          {customAlert.show && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-sky-100 text-center space-y-4">
+                <span className="text-4xl block">💡</span>
+                <p className="text-sm text-slate-700 font-bold leading-relaxed font-sans whitespace-pre-line">
+                  {customAlert.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCustomAlert({ show: false, message: '' })}
+                  className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl text-xs transition-colors shadow-md font-sans"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* [커스텀 확인 모달 창 (Confirm 대용)] */}
+          {customConfirm.show && (
+            <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-rose-100 text-center space-y-4">
+                <span className="text-4xl block animate-bounce">⚠️</span>
+                <h3 className="text-lg font-bold text-slate-900 font-sans">포스트잇 삭제 확인</h3>
+                <p className="text-sm text-slate-600 leading-relaxed font-sans">
+                  {customConfirm.message}
+                </p>
+                <div className="flex gap-2 font-sans">
+                  <button
+                    type="button"
+                    onClick={() => setCustomConfirm({ show: false, message: '', onConfirm: null })}
+                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customConfirm.onConfirm) customConfirm.onConfirm();
+                      setCustomConfirm({ show: false, message: '', onConfirm: null });
+                    }}
+                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition-colors shadow-md"
+                  >
+                    삭제하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
